@@ -8,7 +8,7 @@ This is a public beta. The store is local plaintext, with no encryption or team 
 
 The source is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use, modification, and sharing are permitted under its terms. Commercial use by others is not licensed; Danila Verbinskiy retains the option to use and sell the software commercially. This is a source-available project, not an open-source license.
 
-Install from GitHub with `cargo install --git https://github.com/hikionori/envrun-cli --locked`, or from this checkout with `cargo install --path . --locked`. Run commands through `cargo run --` while developing. The package is named `envrun-cli`; both installation methods provide the `envrun` command.
+Install from crates.io with `cargo install envrun-cli --locked`, from GitHub with `cargo install --git https://github.com/hikionori/envrun-cli --locked`, or from this checkout with `cargo install --path . --locked`. Run commands through `cargo run --` while developing. The package is named `envrun-cli`; all installation methods provide the `envrun` command.
 
 ## Suggestions and completion
 
