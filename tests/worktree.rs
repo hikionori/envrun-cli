@@ -538,6 +538,9 @@ fn completion_suggests_env_paths_and_keys_without_values() {
     assert!(zsh_keys.contains("SHARED"));
     assert!(!zsh_keys.contains("--help"));
     assert!(!zsh_keys.contains("--source"));
+    let prefixed_path =
+        fixture.complete_shell(&fixture.main, "zsh", &["envrun", "get", "./api/.env", ""]);
+    assert!(prefixed_path.contains("SHARED"));
     let flags = fixture.complete(&fixture.main, &["envrun", "get", "api/.env", "--"]);
     assert!(flags.contains("--source"));
     let sources = fixture.complete(
@@ -591,8 +594,17 @@ fn cli_suggestions_and_shell_setup_are_secret_free() {
             .output()
             .unwrap();
         assert!(registration.status.success());
-        assert!(!registration.stdout.is_empty());
-        assert!(!String::from_utf8_lossy(&registration.stdout).contains("from-root"));
+        let script = String::from_utf8(registration.stdout).unwrap();
+        assert!(!script.contains("from-root"));
+        let registered = script.lines().any(|line| match shell {
+            "bash" => line.trim_start().starts_with("complete ") && line.ends_with(" envrun"),
+            "zsh" => line.starts_with("compdef ") && line.ends_with(" envrun"),
+            "fish" => {
+                line.starts_with("complete ") && line.contains("--command envrun --arguments")
+            }
+            _ => unreachable!(),
+        });
+        assert!(registered, "{shell} registered the wrong command");
     }
 
     let typo = fixture.cli(&fixture.main, &["satus"]);

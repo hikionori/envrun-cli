@@ -347,6 +347,7 @@ fn execute(action: Option<Action>) -> Result<()> {
 fn main() {
     CompleteEnv::with_factory(completion_command)
         .var("ENVRUN_COMPLETE")
+        .bin("envrun")
         .complete();
     let cli = Cli::parse();
     if let Err(error) = execute(cli.command) {
