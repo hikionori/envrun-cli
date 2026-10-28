@@ -1,102 +1,108 @@
 # envrun
 
-`envrun` manages ignored `.env` files across Git worktrees. It keeps shared files in a private local store, links them into each worktree, and loads their variables for any command. A terminal UI lets you browse files and keys without showing values by default. It supports macOS and Linux.
+**Stop copying `.env` files between Git worktrees.**
 
-This is a public beta. The store is local plaintext, with no encryption or team secret synchronization. Review the paths and sources shown by `envrun status` and `envrun run --explain` before using it with important credentials.
+New worktree, missing `.env`, broken dev server? Register your ignored env files once, link them into each worktree, and run commands with the right environment. Open the terminal UI to browse files and keys with values masked by default.
 
-## License
+Useful for parallel branches, monorepos, and coding agents working in separate Git worktrees. Runs on macOS and Linux.
 
-The source is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use, modification, and sharing are permitted under its terms. Commercial use by others is not licensed; Danila Verbinskiy retains the option to use and sell the software commercially. This is a source-available project, not an open-source license.
+![envrun CLI and terminal UI demo using sample data](docs/assets/demo.gif)
 
-Install from crates.io with `cargo install envrun-cli --locked`, from GitHub with `cargo install --git https://github.com/hikionori/envrun-cli --locked`, or from this checkout with `cargo install --path . --locked`. Run commands through `cargo run --` while developing. The package is named `envrun-cli`; all installation methods provide the `envrun` command.
+[Quick start](#quick-start) · [Coding agents](#working-with-coding-agents) · [Usage guide](docs/usage.md) · [Report an issue](https://github.com/hikionori/envrun-cli/issues)
 
-## Suggestions and completion
+> **Public beta · Source-available · Noncommercial license.** Files are stored locally in plaintext, with no encryption or team sync. See [storage and behavior](#storage-and-behavior) and [license](#license).
 
-Clap suggests close command and option names when you mistype one. Run `envrun suggest` for next commands based on the current checkout. In a terminal, it also lets you pick a suggestion to print its command; it does not run that command.
-
-To enable tab completion, add the line generated for your shell to its startup file:
+## Install
 
 ```sh
-envrun completions bash >> ~/.bashrc
-envrun completions zsh >> ~/.zshrc
-mkdir -p ~/.config/fish
-envrun completions fish >> ~/.config/fish/config.fish
+cargo install envrun-cli --locked
 ```
 
-Use the line for your shell, then start a new shell. Completion suggests commands, options, env file paths, `--source` choices, and existing key names for `get`, `set`, and `unset`. It never suggests values. Key names come from the selected local or shared file; when both copies exist, add `--source local` or `--source shared` to choose one. The shell setup line reloads envrun's completion code on startup so it stays in sync after upgrades.
+Requires Rust and Cargo. The package is `envrun-cli`; the command is `envrun`. See the [usage guide](docs/usage.md#installation) for installation from GitHub or a local checkout.
 
 ## Quick start
 
-In a Git repository with ignored env files, choose the paths you want to share:
+From the root of an existing Git repository, register an ignored `.env` file:
 
 ```sh
 envrun init myapp
-envrun scan
-envrun add .env services/api/.env
-envrun status
+envrun add .env
 ```
 
-The paths passed to `add` must exist and be ignored by Git. Use the output of `scan` to choose them. `init` creates an empty named project and records its name and a local repository ID in Git config. `scan` lists ignored, regular `.env` and `.env.*` files, excluding `*.example`, `*.backup`, and files already linked to the store. `add` copies selected files to `$XDG_CONFIG_HOME/envrun/projects/<name>/files/` (or `~/.config/envrun/...`), verifies the copies, and replaces the originals with symlinks. It refuses tracked files and existing managed paths.
+Choose an unused project name in place of `myapp`. The `.env` file must already exist and be ignored by Git. `add` copies it to a local store, verifies the copy, and replaces the original with a symlink. **Editing a linked file updates the shared copy for every linked worktree.**
 
-From the repository root, create another worktree and link the managed files there:
+Create another worktree and connect its env files:
 
 ```sh
 git worktree add -b feature-x ../myapp-feature
 cd ../myapp-feature
 envrun link
-envrun status
+envrun run -- npm run dev
 ```
 
-`link` creates links for managed paths whose parent directories exist. It stops before creating any links if it finds a conflicting file or a symlinked parent directory. Editing a linked file changes the shared copy immediately. To make a worktree's file independent, run `envrun unlink path/to/.env`; this restores a regular copy there. Both copies then exist: use `--source local` to work with the independent file, or `--source shared` to work with the store.
+Replace `npm run dev` with your application's command. `link` only links files whose parent directories exist and refuses conflicting files. Run `envrun status` to check the links, or `envrun run --explain` to see file paths, sources, and key names without values or command execution.
 
-To restore a link after `unlink`, run `envrun relink path/to/.env --yes` in that worktree. If the local and shared copies differ, `relink` saves the local copy in a private backup and prints its path before linking to the shared file. If they match, it relinks without a backup. The TUI offers the same action with `l` when the file shows `BOTH`.
+To give this worktree an independent copy later:
 
-`envrun remove path/to/.env --yes` deletes only the stored copy, preserving local copies. It lists every blocking worktree if links still exist. Run `envrun unlink path/to/.env` in each listed worktree before retrying. The TUI shows this list before offering a removal confirmation.
+```sh
+envrun unlink .env
+envrun run --source local -- npm run dev
+```
 
-To associate a separate clone with an existing named project, run `envrun attach myapp` in that clone. This is explicit because separate clones may need different secrets. The store records attached clones so removal checks their links too. If you move a clone, run `envrun status` there to refresh its recorded path before removing a managed file from another clone.
+## Why envrun?
 
-Use `envrun repositories` to list registered clone IDs and Git directories. After permanently deleting a clone **and retiring all of its worktrees**, `envrun forget-repo <id> --yes` removes its stale registration. This command refuses existing Git directories and preserves all stored env files. Do not forget a temporarily disconnected or moved clone; restore it or refresh its location instead.
+- **One local store across worktrees.** Link env files explicitly instead of maintaining copies.
+- **Multiple paths for monorepos.** Register `.env`, `services/api/.env`, and other files separately.
+- **Environment loading for any command.** Load ancestor `.env` files from the repository root through the current directory.
+- **Inspect before running.** `run --explain` shows file paths, sources, and key names without values.
+- **A terminal UI.** Browse and edit files and keys with values masked by default.
+- **Independent settings when needed.** Unlink a file and explicitly choose the local or shared source.
 
-## Run commands
+## Working with coding agents
+
+Running Codex or another coding agent in a separate Git worktree? Ignored env files don't come along with the checkout. After registering them in your main checkout, run `envrun link` in each agent's worktree, then start your usual command through `envrun run -- …`.
+
+No agent-specific integration is needed. Linking is explicit; envrun does not create worktrees or configure agents. Linked files share edits, so use independent local copies when tasks need different settings. Processes started through `run` receive the selected values; masking in the TUI does not restrict a process or agent's access to them.
+
+## Monorepos and the terminal UI
+
+From the repository root, discover and register the files you want to share:
+
+```sh
+envrun scan
+envrun add services/api/.env services/web/.env
+envrun
+```
+
+Use existing, ignored paths from the scan output. In the TUI, press `r` to reveal the selected value and `?` for help. Changes to linked files affect the shared copy.
+
+To load both the root and service `.env` files:
 
 ```sh
 cd services/api
 envrun run -- npm run dev
-envrun run --file .env.local -- npm run dev
-envrun run --file .env.local --explain
-envrun run --source local -- npm run dev
-envrun run --source shared -- npm run dev
 ```
 
-Replace `npm run dev` with the command your project uses, and pass `--file .env.local` only if that file exists. `run` loads `.env` files from the repository root through the current directory. Each `--file` adds a file relative to the current directory. Later files override earlier files and inherited shell variables. `--explain` prints paths, key names, and the selected local/shared source without values or command execution. Shell syntax such as pipelines needs an explicit shell, for example `envrun run -- sh -c 'first | second'`.
+## Storage and behavior
 
-The same `--source` policy applies to `keys`, `get`, `set`, `unset`, and `run`:
+- **Local plaintext:** shared files live under `$XDG_CONFIG_HOME/envrun/projects/<name>/files/`, or `~/.config/envrun/...`. Store directories and files are private to the current Unix user. There is no encryption or team secret synchronization.
+- **Shared edits are immediate:** linked files point to the same stored copy. Use `unlink` for an independent worktree copy; [the usage guide](docs/usage.md#manage-files-and-worktrees) explains relinking, backups, and removal.
+- **Conflicting sources need a choice:** when independent local and shared copies both exist, the default `auto` policy refuses to pick one. Use `--source local` or `--source shared`, even if their contents match.
+- **Review before running:** `run` also includes local-only ancestor `.env` files. Later files override earlier files and inherited shell variables. Use `envrun run --explain` to inspect the selection.
+- **Values are available to the command:** masking keeps values out of the default TUI view; it does not prevent commands from reading or printing their environment.
 
-| Source | Selection |
-| --- | --- |
-| `auto` (default) | Use an envrun link, a shared file missing locally, or an ordinary local file with no shared counterpart. Refuse when independent local and shared copies both exist, even if their bytes match. |
-| `local` | Use files in this worktree. An existing envrun symlink still points to shared data and is reported as shared. |
-| `shared` | Use the store, ignoring independent local copies. Links are not required. |
+## Documentation and feedback
 
-Automatic loading includes local-only ancestor `.env` files. Inspect `envrun run --explain` to review the selection. `${NAME}` and `$NAME` expand using prior assignments, earlier files, then inherited shell variables. Expansion is performed once, in file order; undefined references become empty. Single quotes and `\$` keep dollar references literal. Shell expressions such as `${NAME:-default}` are rejected.
+- [Files, worktrees, separate clones, and removal](docs/usage.md#manage-files-and-worktrees)
+- [Running commands, precedence, expansion, and source selection](docs/usage.md#run-commands)
+- [Key editing and TUI controls](docs/usage.md#manage-keys-and-use-the-tui)
+- [Shell completion and suggested commands](docs/usage.md#suggestions-and-completion)
+- [Reproduce the demo](docs/demo.md)
 
-## Manage keys and use the TUI
+Hit a rough edge? [Open an issue](https://github.com/hikionori/envrun-cli/issues/new) with your OS, `envrun --version`, and steps to reproduce. Use sample values and remove credentials from any output you share. Workflow suggestions are welcome too.
 
-```sh
-envrun keys services/api/.env
-envrun get services/api/.env DATABASE_URL
-envrun get services/api/.env DATABASE_URL --source local
-printf %s 'development' | envrun set services/api/.env LOG_LEVEL
-envrun unset services/api/.env OLD_KEY
-envrun
-```
+Know someone who keeps copying `.env` files into worktrees? Send them this repo. If envrun helps your workflow, consider giving it a star.
 
-`keys` and `get` can inspect an existing local env file before initialization. Editing requires an initialized repository, but a local file does not have to be imported. `get` writes the parsed value without a trailing newline. `set` reads stdin verbatim, including any newline supplied by the caller. Key edits preserve unrelated assignments and comments, and refuse ambiguous assignment boundaries or duplicate assignments for that key.
+## License
 
-`get` and the TUI inspect one file, expanding references against its preceding assignments and the inherited shell. Use `run` when you need expansion across the full ancestor-file chain.
-
-The TUI shows files, keys, and details in separate columns on wide terminals, and adapts to two columns or one pane on smaller terminals. File rows say `LINKED`, `STORED`, `LOCAL`, `BOTH`, `CONFLICT`, or `NO DIR`. The header always shows the selected path and source policy. Press `v` to cycle `Auto → Local → Shared`; for example, `AUTO -> SHARED` means Auto resolved to the shared copy. A linked file also reads the shared copy when Local is chosen. If independent local and shared copies both exist, Auto asks you to choose. An explicit choice is saved per file and worktree, so it survives navigation, refresh, and TUI restart. `Auto` clears that choice. CLI commands continue to use their own `--source` flag or the Auto default.
-
-Use `Tab` or left/right arrows to change panes; use `j`/`k`, up/down arrows, mouse clicks, or the wheel to select rows. On a narrow terminal, `Enter` advances and `Esc` returns. Use `/` to filter paths, `r` to reveal only the selected value, and `F5` to refresh after external changes. Use `i` to select ignored files for import, `a` to add a path, `l` to link or relink a `BOTH` file, `u` to unlink, and `d` to remove a shared copy. Use `n` to add a key, `s` to set its single-line value, `x` to unset it, and `e` to edit the whole file with `$VISUAL`, `$EDITOR`, or `vi`. The editor command may contain whitespace-separated arguments, such as `code --wait`. Press `?` for full help and `q` to quit.
-
-The store contains local plaintext secrets. Directories and stored files are private to the current Unix user. Values stay masked in the TUI until explicitly revealed; errors, status, and `--explain` do not print values.
+The source is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use, modification, and sharing are permitted under its terms. Commercial use by others is not licensed; Danila Verbinskiy retains the option to use and sell the software commercially. This is a source-available project, not an open-source license.
